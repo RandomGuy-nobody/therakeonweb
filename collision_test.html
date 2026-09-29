@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Collision Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #1a1c22; color: #cfd3dc;
+    font-family: ui-monospace, monospace; font-size: 12px;
+    user-select: none;
+  }
+  #canvasWrap { position: fixed; inset: 0; }
+  #panel {
+    position: fixed; top: 10px; left: 10px; bottom: 10px;
+    width: 320px; overflow-y: auto;
+    background: rgba(14,16,20,.93);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 8px; padding: 12px; z-index: 10;
+  }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: #333844; border-radius: 4px; }
+
+  h3 {
+    margin: 12px 0 8px; color: #8fd88f; font-size: 11px;
+    letter-spacing: 2px; border-bottom: 1px solid rgba(255,255,255,.06);
+    padding-bottom: 4px;
+  }
+  h3:first-child { margin-top: 0; }
+
+  .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .row label {
+    font-size: 11px; color: #8b93a3; min-width: 70px;
+    flex-shrink: 0;
+  }
+  .row input[type=text],
+  .row input[type=number],
+  .row select {
+    flex: 1; min-width: 0;
+    background: #191c23; color: #cfd3dc;
+    border: 1px solid #2a2f3a; border-radius: 4px;
+    padding: 4px 6px; font: inherit; font-size: 11px; outline: none;
+  }
+  .row input:focus, .row select:focus { border-color: #4a90ff; }
+
+  button {
+    background: #1f2430; color: #cfd3dc;
+    border: 1px solid #2f3542; border-radius: 4px;
+    padding: 5px 8px; font: inherit; font-size: 11px;
+    cursor: pointer; transition: all .12s;
+  }
+  button:hover { background: #2a3140; border-color: #4a90ff; color: #fff; }
+  button.active { background: #4a90ff; border-color: #4a90ff; color: #fff; }
+  button.danger { background: #2a1a1a; border-color: #5a2a2a; color: #f88; }
+  button.danger:hover { background: #3a1a1a; border-color: #f55; }
+  button.wide { width: 100%; }
+  button.half { flex: 1; }
+
+  #status {
+    margin-top: 10px; padding: 8px; background: #0f1218;
+    border: 1px solid #20242e; border-radius: 4px;
+    font-size: 10px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-all;
+    max-height: 140px; overflow-y: auto;
+  }
+
+  #boxList {
+    background: #0f1218; border: 1px solid #20242e;
+    border-radius: 4px; padding: 4px; margin-top: 6px;
+    max-height: 180px; overflow-y: auto;
+  }
+  .boxItem {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 6px; border-radius: 3px;
+    font-size: 11px; cursor: pointer;
+    transition: background .1s;
+  }
+  .boxItem:hover { background: rgba(74,144,255,.1); }
+  .boxItem.selected { background: rgba(74,144,255,.25); color: #fff; }
+  .boxItem .meta { color: #8b93a3; font-size: 10px; }
+  .boxItem.selected .meta { color: #a8c5ff; }
+
+  #hint {
+    position: fixed; bottom: 10px; right: 10px;
+    padding: 8px 12px; background: rgba(14,16,20,.85);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px; font-size: 11px; color: #8b93a3;
+    z-index: 10; line-height: 1.6; pointer-events: none;
+  }
+  #hint b { color: #ffd97a; }
+
+  #modeBar {
+    position: fixed; top: 10px; right: 10px;
+    display: flex; gap: 6px; padding: 6px;
+    background: rgba(14,16,20,.85);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px; z-index: 10;
+  }
+  #modeBar button { padding: 6px 12px; }
+
+  .checkboxRow {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #8b93a3; margin-bottom: 6px;
+  }
+  .checkboxRow input { accent-color: #4a90ff; cursor: pointer; }
+  .checkboxRow label { cursor: pointer; }
+
+  .rotRow { display: flex; gap: 4px; align-items: center; margin-bottom: 6px; }
+  .rotRow label { font-size: 11px; color: #8b93a3; min-width: 70px; }
+  .rotRow input[type=number] {
+    flex: 1;
+    background: #191c23; color: #cfd3dc;
+    border: 1px solid #2a2f3a; border-radius: 4px;
+    padding: 4px 6px; font: inherit; font-size: 11px; outline: none;
+  }
+  .rotRow button { padding: 4px 8px; min-width: 30px; }
+</style>
+</head>
+<body>
+<div id="canvasWrap"></div>
+
+<div id="modeBar">
+  <button id="modeSelect" class="active">SELECT</button>
+  <button id="modeAdd">+ BOX</button>
+</div>
+
+<div id="panel">
+  <h3>MODEL</h3>
+  <div class="row">
+    <input type="text" id="modelUrl" value="models/cave.glb" style="flex:1;">
+  </div>
+  <div class="row">
+    <button id="loadBtn" class="half">Load</button>
+    <input type="file" id="modelFile" accept=".glb,.gltf" style="flex:1;font-size:10px;">
+  </div>
+  <div class="row">
+    <label>Scale</label>
+    <input type="number" id="modelScale" value="1" step="0.1" min="0.01">
+    <button id="fitBtn">Fit</button>
+  </div>
+
+  <h3>PLAYER</h3>
+  <div class="row">
+    <label>Radius</label>
+    <input type="number" id="playerR" value="0.4" step="0.05" min="0.05">
+  </div>
+  <div class="row">
+    <button id="resetBtn" class="wide">Reset player position</button>
+  </div>
+
+  <h3>SHAPE</h3>
+  <div class="row">
+    <select id="shapeSel">
+      <option value="none">None</option>
+      <option value="circle">Circle</option>
+      <option value="box">Box</option>
+      <option value="walls" selected>Walls (multi-box)</option>
+    </select>
+  </div>
+
+  <div id="circleFields" style="display:none;">
+    <div class="row"><label>Radius</label><input type="number" id="cR" value="3" step="0.1"></div>
+    <div class="row"><label>Center X</label><input type="number" id="cX" value="0" step="0.1"></div>
+    <div class="row"><label>Center Z</label><input type="number" id="cZ" value="0" step="0.1"></div>
+  </div>
+
+  <div id="boxFields" style="display:none;">
+    <div class="row"><label>Half X</label><input type="number" id="bHX" value="2" step="0.1"></div>
+    <div class="row"><label>Half Z</label><input type="number" id="bHZ" value="2" step="0.1"></div>
+    <div class="row"><label>Center X</label><input type="number" id="bX" value="0" step="0.1"></div>
+    <div class="row"><label>Center Z</label><input type="number" id="bZ" value="0" step="0.1"></div>
+    <div class="row"><label>Rotate °</label><input type="number" id="bRot" value="0" step="5"></div>
+  </div>
+
+  <div id="wallsFields">
+    <div class="row">
+      <button id="addHollowBtn" class="wide">+ Add hollow tower preset</button>
+    </div>
+    <div class="row">
+      <button id="addWallBtn" class="half">+ Empty wall</button>
+      <button id="clearWallsBtn" class="half danger">Clear all</button>
+    </div>
+
+    <div id="boxList"></div>
+
+    <h3>SELECTED WALL</h3>
+    <div id="selFields">
+      <div class="row"><label>Center X</label><input type="number" id="wX" value="0" step="0.1"></div>
+      <div class="row"><label>Center Z</label><input type="number" id="wZ" value="0" step="0.1"></div>
+      <div class="row"><label>Half X</label><input type="number" id="wHX" value="1" step="0.1"></div>
+      <div class="row"><label>Half Z</label><input type="number" id="wHZ" value="1" step="0.1"></div>
+      <div class="rotRow">
+        <label>Rotate °</label>
+        <button id="rotMinus15">−15</button>
+        <input type="number" id="wRY" value="0" step="5">
+        <button id="rotPlus15">+15</button>
+      </div>
+      <div class="row">
+        <button id="dupSelBtn" class="half">Duplicate</button>
+        <button id="delSelBtn" class="half danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <h3>SNAP</h3>
+  <div class="checkboxRow">
+    <input type="checkbox" id="snapToggle" checked>
+    <label for="snapToggle">Snap position to 0.5 grid</label>
+  </div>
+  <div class="checkboxRow">
+    <input type="checkbox" id="snapRotToggle" checked>
+    <label for="snapRotToggle">Snap rotation to 15°</label>
+  </div>
+  <div class="checkboxRow">
+    <input type="checkbox" id="showGrid" checked>
+    <label for="showGrid">Show collision outlines</label>
+  </div>
+
+  <h3>EXPORT</h3>
+  <div class="row">
+    <button id="printBtn" class="wide">Print values</button>
+  </div>
+  <div class="row">
+    <button id="copyBtn" class="wide">Copy to clipboard</button>
+  </div>
+
+  <div id="status">Ready. Click "+ BOX" then click the ground to add a wall. Rotate with [ and ].</div>
+</div>
+
+<div id="hint">
+  <b>WASD</b> move &nbsp;·&nbsp; <b>LMB</b> orbit &nbsp;·&nbsp; <b>RMB</b> pan &nbsp;·&nbsp; <b>Wheel</b> zoom<br>
+  <b>[ / ]</b> rotate selected wall −15°/+15° &nbsp;·&nbsp; <b>Shift + [ / ]</b> rotate 5°
+</div>
+
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // SCENE
+  // ============================================================
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.getElementById('canvasWrap').appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1c22);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+
+  scene.add(new THREE.HemisphereLight(0xcfd8e3, 0x30323a, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(8, 14, 8);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.near = 0.5;
+  key.shadow.camera.far = 60;
+  key.shadow.camera.left = -30;
+  key.shadow.camera.right = 30;
+  key.shadow.camera.top = 30;
+  key.shadow.camera.bottom = -30;
+  scene.add(key);
+
+  const grid = new THREE.GridHelper(80, 160, 0x555a66, 0x2a2e38);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.55;
+  scene.add(grid);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshStandardMaterial({ color: 0x24262c, roughness: 1 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.001;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  let loadedModel = null;
+  let collisionShape = 'walls';
+  const player = { x: 0, z: 12, r: 0.4 };
+
+  const circle = { r: 3, x: 0, z: 0 };
+  const box = { hx: 2, hz: 2, x: 0, z: 0, ry: 0 };
+
+  // Walls: { x, z, halfX, halfZ, ry }  ry is radians
+  const walls = [];
+  let selectedWall = -1;
+
+  let mode = 'select';
+  let snapEnabled = true;
+  let snapRotEnabled = true;
+  let showOutlines = true;
+
+  // ============================================================
+  // PLAYER
+  // ============================================================
+  const playerGeo = (typeof THREE.CapsuleGeometry === 'function')
+    ? new THREE.CapsuleGeometry(0.4, 0.9, 4, 12)
+    : new THREE.CylinderGeometry(0.4, 0.4, 1.7, 12);
+  const playerMesh = new THREE.Mesh(
+    playerGeo,
+    new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0x441111 })
+  );
+  playerMesh.position.set(player.x, 0.85, player.z);
+  playerMesh.castShadow = true;
+  scene.add(playerMesh);
+
+  const playerVis = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.CircleGeometry(player.r, 32)),
+    new THREE.LineBasicMaterial({ color: 0xff5555 })
+  );
+  playerVis.rotation.x = -Math.PI / 2;
+  playerVis.position.set(player.x, 0.04, player.z);
+  scene.add(playerVis);
+
+  // ============================================================
+  // CIRCLE / BOX VISUALS
+  // ============================================================
+  const circleVis = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 48),
+    new THREE.MeshBasicMaterial({ color: 0x4a90ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
+  );
+  circleVis.rotation.x = -Math.PI / 2;
+  circleVis.position.y = 0.02;
+  scene.add(circleVis);
+
+  const circleEdge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.CircleGeometry(1, 64)),
+    new THREE.LineBasicMaterial({ color: 0x4a90ff })
+  );
+  circleEdge.rotation.x = -Math.PI / 2;
+  circleEdge.position.y = 0.03;
+  scene.add(circleEdge);
+
+  const boxVis = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.01, 1),
+    new THREE.MeshBasicMaterial({ color: 0x4a90ff, transparent: true, opacity: 0.2, depthWrite: false })
+  );
+  boxVis.position.y = 0.02;
+  scene.add(boxVis);
+
+  const boxEdge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 0.01, 1)),
+    new THREE.LineBasicMaterial({ color: 0x4a90ff })
+  );
+  boxEdge.position.y = 0.03;
+  scene.add(boxEdge);
+
+  // ============================================================
+  // WALLS
+  // ============================================================
+  const wallsGroup = new THREE.Group();
+  scene.add(wallsGroup);
+  const wallMeshes = [];
+
+  const SELECTED_COLOR = 0xffd97a;
+  const NORMAL_COLOR = 0x4a90ff;
+
+  function rebuildWallVisuals() {
+    while (wallsGroup.children.length) {
+      const c = wallsGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+    wallMeshes.length = 0;
+
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const selected = (i === selectedWall);
+      const color = selected ? SELECTED_COLOR : NORMAL_COLOR;
+
+      const geo = new THREE.BoxGeometry(w.halfX * 2, 0.06, w.halfZ * 2);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.28, depthWrite: false
+      }));
+      mesh.position.set(w.x, 0.02, w.z);
+      mesh.rotation.y = w.ry || 0;
+      mesh.visible = showOutlines;
+      mesh.userData.wallIndex = i;
+      wallsGroup.add(mesh);
+
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color })
+      );
+      edge.position.set(w.x, 0.03, w.z);
+      edge.rotation.y = w.ry || 0;
+      edge.visible = showOutlines;
+      wallsGroup.add(edge);
+
+      wallMeshes.push(mesh);
+    }
+  }
+
+  // ============================================================
+  // ORBIT CONTROLS
+  // ============================================================
+  const orbit = { theta: 0.6, phi: 0.9, radius: 25, target: new THREE.Vector3(0, 1, 0) };
+  function updateCamera() {
+    const sp = Math.sin(orbit.phi), cp = Math.cos(orbit.phi);
+    const st = Math.sin(orbit.theta), ct = Math.cos(orbit.theta);
+    camera.position.set(
+      orbit.target.x + orbit.radius * sp * st,
+      orbit.target.y + orbit.radius * cp,
+      orbit.target.z + orbit.radius * sp * ct
+    );
+    camera.lookAt(orbit.target);
+  }
+  updateCamera();
+
+  let orbitDrag = false, panDrag = false;
+  let lastX = 0, lastY = 0;
+  let mouseDownAt = 0;
+  let mouseDownPos = { x: 0, y: 0 };
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+
+  renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+  renderer.domElement.addEventListener('mousedown', e => {
+    if (e.button === 0) {
+      orbitDrag = true;
+      mouseDownAt = performance.now();
+      mouseDownPos.x = e.clientX;
+      mouseDownPos.y = e.clientY;
+    } else if (e.button === 2 || e.button === 1) {
+      panDrag = true;
+    }
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  addEventListener('mouseup', e => {
+    const dx = e.clientX - mouseDownPos.x;
+    const dy = e.clientY - mouseDownPos.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const time = performance.now() - mouseDownAt;
+    if (e.button === 0 && dist < 4 && time < 300) handleClick(e);
+    orbitDrag = false;
+    panDrag = false;
+  });
+
+  addEventListener('mousemove', e => {
+    if (orbitDrag) {
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      orbit.theta -= dx * 0.008;
+      orbit.phi -= dy * 0.008;
+      orbit.phi = Math.max(0.05, Math.min(Math.PI / 2 - 0.05, orbit.phi));
+      updateCamera();
+    } else if (panDrag) {
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      const right = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
+      const up = new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+      const s = orbit.radius * 0.0018;
+      orbit.target.addScaledVector(right, -dx * s);
+      orbit.target.addScaledVector(up, dy * s);
+      updateCamera();
+    }
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  renderer.domElement.addEventListener('wheel', e => {
+    e.preventDefault();
+    orbit.radius = Math.max(3, Math.min(120, orbit.radius * Math.exp(e.deltaY * 0.0012)));
+    updateCamera();
+  }, { passive: false });
+
+  // ============================================================
+  // CLICK HANDLING
+  // ============================================================
+  function handleClick(e) {
+    pointer.x = (e.clientX / innerWidth) * 2 - 1;
+    pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+
+    if (mode === 'add') {
+      const hits = raycaster.intersectObject(ground);
+      if (hits.length === 0) return;
+      const p = hits[0].point;
+      const nx = snapEnabled ? Math.round(p.x * 2) / 2 : p.x;
+      const nz = snapEnabled ? Math.round(p.z * 2) / 2 : p.z;
+      walls.push({ x: nx, z: nz, halfX: 1, halfZ: 0.3, ry: 0 });
+      selectedWall = walls.length - 1;
+      rebuildWallVisuals();
+      updateBoxList();
+      syncSelectedInputs();
+      setStatus(`Added wall ${selectedWall} at (${nx.toFixed(2)}, ${nz.toFixed(2)}). Total: ${walls.length}`);
+      return;
+    }
+
+    const wallHits = raycaster.intersectObjects(wallsGroup.children);
+    for (const h of wallHits) {
+      if (typeof h.object.userData.wallIndex === 'number') {
+        selectedWall = h.object.userData.wallIndex;
+        rebuildWallVisuals();
+        updateBoxList();
+        syncSelectedInputs();
+        setStatus(`Selected wall ${selectedWall}.`);
+        return;
+      }
+    }
+    selectedWall = -1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+  }
+
+  // ============================================================
+  // MODEL LOADING
+  // ============================================================
+  const loader = new THREE.GLTFLoader();
+
+  function disposeModel() {
+    if (!loadedModel) return;
+    scene.remove(loadedModel);
+    loadedModel.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); }
+          m.dispose();
+        }
+      }
+    });
+    loadedModel = null;
+  }
+
+  function loadFromUrl(url) {
+    setStatus('Loading ' + url + ' …');
+    loader.load(url, onModelLoaded, undefined, err => {
+      setStatus('Load failed: ' + (err && err.message ? err.message : url) + '\n(If on file://, use the file picker.)');
+    });
+  }
+  function loadFromFile(file) {
+    setStatus('Reading ' + file.name + ' …');
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        loader.parse(e.target.result, '', onModelLoaded, err => {
+          setStatus('Parse failed: ' + (err && err.message ? err.message : err));
+        });
+      } catch (err) { setStatus('Error: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function onModelLoaded(gltf) {
+    disposeModel();
+    loadedModel = gltf.scene;
+    loadedModel.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+    const scale = parseFloat(document.getElementById('modelScale').value) || 1;
+    loadedModel.scale.setScalar(scale);
+    loadedModel.updateMatrixWorld(true);
+
+    const bbox = new THREE.Box3().setFromObject(loadedModel);
+    const center = bbox.getCenter(new THREE.Vector3());
+    loadedModel.position.x -= center.x;
+    loadedModel.position.z -= center.z;
+    loadedModel.position.y -= bbox.min.y;
+    loadedModel.updateMatrixWorld(true);
+
+    scene.add(loadedModel);
+
+    const nb = new THREE.Box3().setFromObject(loadedModel);
+    const size = nb.getSize(new THREE.Vector3());
+    setStatus(
+      'Loaded.\nModel size: ' + size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2) +
+      '\nCentered. Use + BOX to place walls, rotate with [ and ].'
+    );
+  }
+
+  function fitModelToView() {
+    if (!loadedModel) return;
+    const bbox = new THREE.Box3().setFromObject(loadedModel);
+    const size = bbox.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    orbit.target.set(0, size.y * 0.3, 0);
+    orbit.radius = maxDim * 2.2;
+    updateCamera();
+  }
+
+  // ============================================================
+  // COLLISION
+  // ============================================================
+  function wouldCollide(newX, newZ) {
+    if (collisionShape === 'none') return false;
+
+    if (collisionShape === 'circle') {
+      const dx = newX - circle.x, dz = newZ - circle.z;
+      const minDist = circle.r + player.r;
+      return (dx * dx + dz * dz) < minDist * minDist;
+    }
+
+    if (collisionShape === 'box') {
+      // Rotated box vs point
+      const dx = newX - box.x, dz = newZ - box.z;
+      const c = Math.cos(box.ry || 0), s = Math.sin(box.ry || 0);
+      const lx = dx * c - dz * s;
+      const lz = dx * s + dz * c;
+      return Math.abs(lx) < box.hx + player.r && Math.abs(lz) < box.hz + player.r;
+    }
+
+    if (collisionShape === 'walls') {
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        const dx = newX - w.x, dz = newZ - w.z;
+        const c = Math.cos(w.ry || 0), s = Math.sin(w.ry || 0);
+        const lx = dx * c - dz * s;
+        const lz = dx * s + dz * c;
+        if (Math.abs(lx) < w.halfX + player.r &&
+            Math.abs(lz) < w.halfZ + player.r) return true;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  function movePlayer(dx, dz) {
+    if (!wouldCollide(player.x + dx, player.z)) player.x += dx;
+    if (!wouldCollide(player.x, player.z + dz)) player.z += dz;
+    playerMesh.position.set(player.x, 0.85, player.z);
+    playerVis.position.set(player.x, 0.04, player.z);
+  }
+
+  // ============================================================
+  // KEYBOARD
+  // ============================================================
+  const keys = {};
+  addEventListener('keydown', e => {
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+
+    keys[e.key.toLowerCase()] = true;
+
+    // Rotate selected wall with [ and ]
+    if (selectedWall >= 0 && selectedWall < walls.length) {
+      const step = e.shiftKey ? 5 : 15;
+      let rotated = false;
+      if (e.key === '[') { walls[selectedWall].ry -= step * Math.PI / 180; rotated = true; }
+      if (e.key === ']') { walls[selectedWall].ry += step * Math.PI / 180; rotated = true; }
+      if (rotated) {
+        if (snapRotEnabled) {
+          const deg = Math.round((walls[selectedWall].ry * 180 / Math.PI) / 15) * 15;
+          walls[selectedWall].ry = deg * Math.PI / 180;
+        }
+        rebuildWallVisuals();
+        updateBoxList();
+        syncSelectedInputs();
+        e.preventDefault();
+      }
+    }
+  });
+  addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+  });
+
+  // ============================================================
+  // UI
+  // ============================================================
+  const $ = id => document.getElementById(id);
+  function setStatus(t) { $('status').textContent = t; }
+
+  function syncShapeVisibility() {
+    $('circleFields').style.display = collisionShape === 'circle' ? '' : 'none';
+    $('boxFields').style.display = collisionShape === 'box' ? '' : 'none';
+    $('wallsFields').style.display = collisionShape === 'walls' ? '' : 'none';
+
+    circleVis.visible = collisionShape === 'circle';
+    circleEdge.visible = collisionShape === 'circle';
+    boxVis.visible = collisionShape === 'box';
+    boxEdge.visible = collisionShape === 'box';
+    wallsGroup.visible = collisionShape === 'walls';
+  }
+
+  function updateCircleVis() {
+    circleVis.position.set(circle.x, 0.02, circle.z);
+    circleVis.scale.set(circle.r, 1, circle.r);
+    circleEdge.position.set(circle.x, 0.03, circle.z);
+    circleEdge.scale.set(circle.r, 1, circle.r);
+  }
+  function updateBoxVis() {
+    boxVis.position.set(box.x, 0.02, box.z);
+    boxVis.scale.set(box.hx * 2, 1, box.hz * 2);
+    boxVis.rotation.y = box.ry || 0;
+    boxEdge.position.set(box.x, 0.03, box.z);
+    boxEdge.scale.set(box.hx * 2, 1, box.hz * 2);
+    boxEdge.rotation.y = box.ry || 0;
+  }
+
+  function updateBoxList() {
+    const el = $('boxList');
+    el.innerHTML = '';
+    if (walls.length === 0) {
+      el.innerHTML = '<div style="padding:6px;color:#555c6a;font-size:11px;">No walls yet.</div>';
+      return;
+    }
+    walls.forEach((w, i) => {
+      const row = document.createElement('div');
+      row.className = 'boxItem' + (i === selectedWall ? ' selected' : '');
+      const label = document.createElement('span');
+      label.textContent = `Wall ${i}`;
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      const deg = Math.round((w.ry || 0) * 180 / Math.PI);
+      meta.textContent = `(${w.x.toFixed(1)}, ${w.z.toFixed(1)}) ${(w.halfX*2).toFixed(1)}×${(w.halfZ*2).toFixed(1)} ${deg}°`;
+      row.appendChild(label);
+      row.appendChild(meta);
+      row.addEventListener('click', () => {
+        selectedWall = i;
+        rebuildWallVisuals();
+        updateBoxList();
+        syncSelectedInputs();
+      });
+      el.appendChild(row);
+    });
+  }
+
+  function syncSelectedInputs() {
+    const hasSel = selectedWall >= 0 && selectedWall < walls.length;
+    const fields = $('selFields');
+    fields.style.opacity = hasSel ? '1' : '0.4';
+    fields.style.pointerEvents = hasSel ? 'auto' : 'none';
+    if (!hasSel) return;
+    const w = walls[selectedWall];
+    $('wX').value = w.x.toFixed(2);
+    $('wZ').value = w.z.toFixed(2);
+    $('wHX').value = w.halfX.toFixed(2);
+    $('wHZ').value = w.halfZ.toFixed(2);
+    const deg = Math.round((w.ry || 0) * 180 / Math.PI);
+    $('wRY').value = deg;
+  }
+
+  function wireW(id, prop, isRot) {
+    $(id).addEventListener('input', e => {
+      if (selectedWall < 0 || selectedWall >= walls.length) return;
+      let v = parseFloat(e.target.value);
+      if (isNaN(v)) return;
+      if (isRot) v = v * Math.PI / 180;
+      walls[selectedWall][prop] = v;
+      rebuildWallVisuals();
+      updateBoxList();
+    });
+  }
+  wireW('wX', 'x');
+  wireW('wZ', 'z');
+  wireW('wHX', 'halfX');
+  wireW('wHZ', 'halfZ');
+  wireW('wRY', 'ry', true);
+
+  // Quick rotate buttons
+  function bumpRotation(delta) {
+    if (selectedWall < 0 || selectedWall >= walls.length) return;
+    const w = walls[selectedWall];
+    let deg = Math.round((w.ry || 0) * 180 / Math.PI) + delta;
+    if (snapRotEnabled) deg = Math.round(deg / 15) * 15;
+    w.ry = deg * Math.PI / 180;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+  }
+  $('rotMinus15').addEventListener('click', () => bumpRotation(-15));
+  $('rotPlus15').addEventListener('click', () => bumpRotation(15));
+
+  $('shapeSel').addEventListener('change', e => {
+    collisionShape = e.target.value;
+    syncShapeVisibility();
+  });
+
+  function wireC(id, prop) {
+    $(id).addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      if (isNaN(v)) return;
+      circle[prop] = v;
+      updateCircleVis();
+    });
+  }
+  wireC('cR', 'r'); wireC('cX', 'x'); wireC('cZ', 'z');
+
+  function wireB(id, prop, isRot) {
+    $(id).addEventListener('input', e => {
+      let v = parseFloat(e.target.value);
+      if (isNaN(v)) return;
+      if (isRot) v = v * Math.PI / 180;
+      box[prop] = v;
+      updateBoxVis();
+    });
+  }
+  wireB('bHX', 'hx'); wireB('bHZ', 'hz'); wireB('bX', 'x'); wireB('bZ', 'z');
+  wireB('bRot', 'ry', true);
+
+  $('playerR').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!isNaN(v) && v > 0) {
+      player.r = v;
+      playerVis.scale.set(v, 1, v);
+    }
+  });
+
+  $('loadBtn').addEventListener('click', () => loadFromUrl($('modelUrl').value.trim()));
+  $('modelUrl').addEventListener('keydown', e => { if (e.key === 'Enter') $('loadBtn').click(); });
+  $('modelFile').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) loadFromFile(f);
+  });
+  $('modelScale').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!isNaN(v) && v > 0 && loadedModel) {
+      loadedModel.scale.setScalar(v);
+      loadedModel.updateMatrixWorld(true);
+    }
+  });
+  $('fitBtn').addEventListener('click', fitModelToView);
+
+  $('resetBtn').addEventListener('click', () => {
+    player.x = 0; player.z = 12;
+    playerMesh.position.set(player.x, 0.85, player.z);
+    playerVis.position.set(player.x, 0.04, player.z);
+  });
+
+  $('addHollowBtn').addEventListener('click', () => {
+    const cx = 0, cz = 0;
+    const half = 3;
+    const thick = 0.3;
+    const doorHalf = 1;
+    const frontZ = cz + half;
+    walls.push({ x: cx - (half + doorHalf) / 2, z: frontZ, halfX: (half - doorHalf) / 2, halfZ: thick, ry: 0 });
+    walls.push({ x: cx + (half + doorHalf) / 2, z: frontZ, halfX: (half - doorHalf) / 2, halfZ: thick, ry: 0 });
+    walls.push({ x: cx, z: cz - half, halfX: half, halfZ: thick, ry: 0 });
+    walls.push({ x: cx - half, z: cz, halfX: thick, halfZ: half, ry: 0 });
+    walls.push({ x: cx + half, z: cz, halfX: thick, halfZ: half, ry: 0 });
+    selectedWall = walls.length - 1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+    setStatus('Added hollow tower (5 walls, door +Z). Rotate with [ and ].');
+  });
+
+  $('addWallBtn').addEventListener('click', () => {
+    walls.push({ x: 0, z: 0, halfX: 1, halfZ: 0.3, ry: 0 });
+    selectedWall = walls.length - 1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+  });
+
+  $('clearWallsBtn').addEventListener('click', () => {
+    walls.length = 0;
+    selectedWall = -1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+    setStatus('Walls cleared.');
+  });
+
+  $('dupSelBtn').addEventListener('click', () => {
+    if (selectedWall < 0) return;
+    const w = walls[selectedWall];
+    walls.push({ x: w.x + 1, z: w.z, halfX: w.halfX, halfZ: w.halfZ, ry: w.ry || 0 });
+    selectedWall = walls.length - 1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+  });
+
+  $('delSelBtn').addEventListener('click', () => {
+    if (selectedWall < 0) return;
+    walls.splice(selectedWall, 1);
+    if (selectedWall >= walls.length) selectedWall = walls.length - 1;
+    rebuildWallVisuals();
+    updateBoxList();
+    syncSelectedInputs();
+  });
+
+  $('modeSelect').addEventListener('click', () => {
+    mode = 'select';
+    $('modeSelect').classList.add('active');
+    $('modeAdd').classList.remove('active');
+    setStatus('Mode: SELECT. Click a wall to select. [ and ] to rotate.');
+  });
+  $('modeAdd').addEventListener('click', () => {
+    mode = 'add';
+    $('modeAdd').classList.add('active');
+    $('modeSelect').classList.remove('active');
+    setStatus('Mode: + BOX. Click ground to add.');
+  });
+
+  $('snapToggle').addEventListener('change', e => { snapEnabled = e.target.checked; });
+  $('snapRotToggle').addEventListener('change', e => { snapRotEnabled = e.target.checked; });
+  $('showGrid').addEventListener('change', e => {
+    showOutlines = e.target.checked;
+    rebuildWallVisuals();
+  });
+
+  function buildExportText() {
+    const lines = [];
+    lines.push('const landmark = {');
+    if (collisionShape === 'circle') {
+      lines.push(`  shape: 'circle',`);
+      lines.push(`  radius: ${circle.r.toFixed(3)},`);
+      lines.push(`  x: ${circle.x.toFixed(3)},`);
+      lines.push(`  z: ${circle.z.toFixed(3)},`);
+    } else if (collisionShape === 'box') {
+      lines.push(`  shape: 'box',`);
+      lines.push(`  halfX: ${box.hx.toFixed(3)},`);
+      lines.push(`  halfZ: ${box.hz.toFixed(3)},`);
+      lines.push(`  x: ${box.x.toFixed(3)},`);
+      lines.push(`  z: ${box.z.toFixed(3)},`);
+      lines.push(`  ry: ${(box.ry || 0).toFixed(4)},`);
+    } else if (collisionShape === 'walls') {
+      lines.push(`  shape: 'walls',`);
+      lines.push(`  walls: [`);
+      for (const w of walls) {
+        lines.push(`    { x: ${w.x.toFixed(3)}, z: ${w.z.toFixed(3)}, halfX: ${w.halfX.toFixed(3)}, halfZ: ${w.halfZ.toFixed(3)}, ry: ${(w.ry || 0).toFixed(4)} },`);
+      }
+      lines.push(`  ],`);
+    } else {
+      lines.push(`  shape: 'none',`);
+    }
+    lines.push('};');
+    return lines.join('\n');
+  }
+
+  $('printBtn').addEventListener('click', () => {
+    const text = buildExportText();
+    console.log(text);
+    setStatus(text);
+  });
+
+  $('copyBtn').addEventListener('click', () => {
+    const text = buildExportText();
+    navigator.clipboard.writeText(text).then(() => {
+      setStatus('Copied.\n\n' + text);
+    }).catch(() => {
+      setStatus('Clipboard failed. Use Print values.\n\n' + text);
+    });
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const speed = 6 * 0.016;
+    let dx = 0, dz = 0;
+    if (keys['w'] || keys['arrowup'])    dz -= speed;
+    if (keys['s'] || keys['arrowdown'])  dz += speed;
+    if (keys['a'] || keys['arrowleft'])  dx -= speed;
+    if (keys['d'] || keys['arrowright']) dx += speed;
+    if (dx || dz) movePlayer(dx, dz);
+    renderer.render(scene, camera);
+  }
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  syncShapeVisibility();
+  updateCircleVis();
+  updateBoxVis();
+  playerVis.scale.set(player.r, 1, player.r);
+  rebuildWallVisuals();
+  updateBoxList();
+  syncSelectedInputs();
+  animate();
+})();
+</script>
+</body>
+</html>
