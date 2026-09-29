@@ -822,6 +822,7 @@ function updateMpCount() {
 
 if (socket) {
   socket.on('players', (list) => {
+    // Add or update everyone the server says is present
     for (const id in list) {
       if (id === mySocketId) continue;
       makeRemotePlayer(id);
@@ -832,6 +833,11 @@ if (socket) {
       rp.dead = !!p.dead;
       applyRemoteIdentity(id, p.name, p.color);
       applyRemoteState(id, p);
+    }
+    // Remove any remote player the server didn't mention. This is the
+    // safety net that catches disconnects / reconnects / ghosts.
+    for (const id in remotePlayers) {
+      if (!list[id]) removeRemotePlayer(id);
     }
     updateMpCount();
   });
@@ -881,7 +887,10 @@ if (socket) {
       setTimeout(() => { try { controls.lock(); } catch (e) {} }, 60);
     }
   });
-  socket.on('player-left', (id) => removeRemotePlayer(id));
+  socket.on('player-left', (d) => {
+    const id = typeof d === 'string' ? d : (d && d.id);
+    if (id) removeRemotePlayer(id);
+  });
 
   // ---- SHOP ----
   socket.on('shop-updated', (d) => {

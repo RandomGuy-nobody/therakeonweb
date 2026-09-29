@@ -1232,7 +1232,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     verifiedSockets.delete(socket.id);
     delete players[socket.id];
-    io.emit('player-left', { id: socket.id });
+    io.emit('player-left', socket.id);
     io.emit('players', buildPlayersPayload());
   });
 });
