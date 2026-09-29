@@ -1609,7 +1609,16 @@ function setInsideWaypoint(x, y, z) { insideWaypoint.set(x, y, z); insideWpMarke
 new THREE.GLTFLoader().load(HOUSE_MODEL_PATH, (gltf) => {
   const house = gltf.scene;
   house.scale.setScalar(HOUSE_SCALE);
-  house.position.set(HOUSE_POSITION.x, HOUSE_POSITION.y, HOUSE_POSITION.z);
+  house.updateMatrixWorld(true);
+
+  // Center the model the same way the collision editor did.
+  const bbox = new THREE.Box3().setFromObject(house);
+  const center = bbox.getCenter(new THREE.Vector3());
+
+  house.position.x = HOUSE_POSITION.x - center.x;
+  house.position.z = HOUSE_POSITION.z - center.z;
+  house.position.y = HOUSE_POSITION.y - bbox.min.y;
+
   house.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(house);
   console.log('=== HOUSE loaded ===');
