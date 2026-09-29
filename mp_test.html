@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Multiplayer Test</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #111; font-family: monospace; }
+  #info { position: absolute; top: 10px; left: 10px; z-index: 10;
+          background: rgba(0,0,0,0.7); color: #fff; padding: 10px 14px;
+          border-radius: 5px; font-size: 13px; line-height: 1.5; }
+  #info b { color: #6cf; }
+</style>
+</head>
+<body>
+<div id="info">Connecting…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="three.min.js"></script>
+<script>
+const socket = io();
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111122);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 1.2));
+scene.add(new THREE.GridHelper(60, 60, 0x555555, 0x222222));
+
+// My player — red
+const me = new THREE.Mesh(
+  new THREE.BoxGeometry(0.8, 1.8, 0.8),
+  new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0x661111 })
+);
+me.position.set(0, 1.0, 0);
+scene.add(me);
+
+// Everyone else — blue
+const others = {};
+function makePlayer(id) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 1.8, 0.8),
+    new THREE.MeshStandardMaterial({ color: 0x4488ff, emissive: 0x112244 })
+  );
+  m.userData.target = new THREE.Vector3(0, 1, 0);
+  m.position.set(0, 1, 0);
+  scene.add(m);
+  others[id] = m;
+}
+function removePlayer(id) {
+  if (!others[id]) return;
+  scene.remove(others[id]);
+  delete others[id];
+}
+
+const keys = {};
+addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+addEventListener('keyup',   e => keys[e.key.toLowerCase()] = false);
+
+const info = document.getElementById('info');
+
+socket.on('connect', () => {
+  info.innerHTML = `Connected<br>my id: <b>${socket.id.slice(0,6)}</b><br>players: <b>1</b>`;
+});
+
+socket.on('players', (data) => {
+  for (const id in data) {
+    if (id !== socket.id) makePlayer(id);
+  }
+  info.innerHTML = `Connected<br>my id: <b>${socket.id.slice(0,6)}</b><br>players: <b>${Object.keys(data).length}</b>`;
+});
+
+socket.on('player-joined', (p) => {
+  makePlayer(p.id);
+  console.log('player joined:', p.id);
+});
+
+socket.on('player-moved', (p) => {
+  const o = others[p.id];
+  if (o) o.userData.target.set(p.x, p.y, p.z);
+});
+
+socket.on('player-left', (id) => {
+  removePlayer(id);
+  console.log('player left:', id);
+});
+
+let lastSend = 0;
+function animate(t) {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.033, (t - (animate.last || t)) / 1000);
+  animate.last = t;
+
+  const speed = 5 * dt;
+  if (keys['w'] || keys['arrowup'])    me.position.z -= speed;
+  if (keys['s'] || keys['arrowdown'])  me.position.z += speed;
+  if (keys['a'] || keys['arrowleft'])  me.position.x -= speed;
+  if (keys['d'] || keys['arrowright']) me.position.x += speed;
+
+  camera.position.set(me.position.x, 8, me.position.z + 14);
+  camera.lookAt(me.position.x, 1, me.position.z);
+
+  for (const id in others) {
+    others[id].position.lerp(others[id].userData.target, 0.35);
+  }
+
+  if (t - lastSend > 50) {
+    lastSend = t;
+    socket.emit('move', { x: me.position.x, y: me.position.y, z: me.position.z, ry: 0 });
+  }
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

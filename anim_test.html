@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horror Woods Prototype</title>
+<style>
+body{margin:0;overflow:hidden;background:#000;font-family:sans-serif}
+#instructions{position:absolute;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;background:rgba(0,0,0,.85);cursor:pointer;text-align:center;z-index:20}
+#crosshair{position:absolute;top:50%;left:50%;width:6px;height:6px;background:rgba(255,255,255,.4);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none}
+#clickHint{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;color:#0f0;background:rgba(0,20,0,.55);cursor:pointer;z-index:15;font-family:monospace;text-align:center}
+#clickHint h2{font-size:32px;margin:0 0 10px;letter-spacing:4px}
+#clickHint p{font-size:14px;opacity:.8;margin:4px 0}
+#loading{position:absolute;bottom:20px;left:20px;color:#0f0;font-family:monospace;font-size:14px;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:4px;pointer-events:none;z-index:6}
+#menuControls{margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:stretch}
+#renderDistBox{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:14px 22px 12px;font-family:monospace;color:#ddd;user-select:none;cursor:default;min-width:340px}
+#renderDistBox .label{font-size:13px;letter-spacing:3px;color:#cfc;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+#renderDistBox .label .val{color:#ffd97a;font-weight:700}
+#renderDistBox input[type=range]{width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,#444,#888);border-radius:3px;outline:none;cursor:pointer}
+#renderDistBox input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;background:#ffd97a;border-radius:50%;cursor:pointer;box-shadow:0 0 8px rgba(255,217,122,.6);border:2px solid #222}
+#renderDistBox input[type=range]::-moz-range-thumb{width:16px;height:16px;background:#ffd97a;border-radius:50%;cursor:pointer;box-shadow:0 0 8px rgba(255,217,122,.6);border:2px solid #222}
+#renderDistBox .hint{margin-top:8px;font-size:11px;color:#888;letter-spacing:1px;display:flex;justify-content:space-between}
+.menuToggle{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:12px 22px;font-family:monospace;color:#ddd;user-select:none;cursor:default;min-width:340px;display:flex;justify-content:space-between;align-items:center}
+.menuToggle .label{font-size:13px;letter-spacing:3px;color:#cfc;margin:0}
+.menuToggle .sub{font-size:10px;color:#888;letter-spacing:1px;margin-top:2px}
+.menuToggle .switch{position:relative;width:44px;height:22px;background:#333;border-radius:11px;cursor:pointer;transition:background .2s;flex-shrink:0;margin-left:14px}
+.menuToggle .switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:#aaa;border-radius:50%;transition:transform .2s,background .2s}
+.menuToggle .switch.on{background:#4a8f4a}
+.menuToggle .switch.on::after{transform:translateX(22px);background:#cfc;box-shadow:0 0 8px rgba(143,216,143,.6)}
+#phaseHud{position:absolute;top:18px;left:50%;transform:translateX(-50%);color:#fff;font-family:monospace;text-align:center;background:rgba(0,0,0,.6);padding:8px 22px;border-radius:6px;display:none;z-index:6;border:1px solid rgba(255,255,255,.15);pointer-events:none;min-width:140px}
+#phaseName{font-size:15px;font-weight:700;letter-spacing:4px;color:#ffd97a;text-shadow:0 0 8px rgba(255,217,122,.5)}
+#phaseHud.night #phaseName{color:#9aacd4;text-shadow:0 0 8px rgba(154,172,212,.6)}
+#phaseHud.blood #phaseName{color:#ff2a2a;text-shadow:0 0 12px #f00,0 0 24px #800}
+#phaseTimer{font-size:34px;font-weight:700;letter-spacing:2px;line-height:1.05;margin-top:2px}
+#phaseTimer.warning{color:#ff6b4a;animation:pulseWarn .9s ease-in-out infinite}
+#phaseTimer.glitch{color:#ff2020;font-family:monospace;text-shadow:0 0 10px #f00,0 0 20px #800;animation:glitchJitter .06s infinite}
+@keyframes pulseWarn{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes glitchJitter{0%{transform:translate(0,0)}25%{transform:translate(-2px,1px)}50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}100%{transform:translate(1px,2px)}}
+#pointsHud{position:absolute;top:18px;right:20px;color:#ffd97a;font-family:monospace;font-size:15px;font-weight:700;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:6px;display:none;z-index:6;letter-spacing:2px;border:1px solid rgba(255,217,122,.25);text-shadow:0 0 8px rgba(255,217,122,.4)}
+#rakeShieldWrap{position:absolute;top:74px;left:50%;transform:translateX(-50%);width:260px;height:8px;background:rgba(0,0,0,.75);border:1px solid rgba(80,150,255,.55);border-radius:4px;display:none;z-index:6;overflow:hidden}
+#rakeShieldBar{height:100%;width:100%;background:linear-gradient(90deg,#4a90ff,#88bfff);transition:width .15s linear;box-shadow:0 0 8px rgba(100,170,255,.7)}
+#rakeShieldLabel{position:absolute;top:60px;left:50%;transform:translateX(-50%);color:#88bfff;font-family:monospace;font-size:10px;text-shadow:0 0 6px rgba(100,170,255,.7);display:none;z-index:6;letter-spacing:3px;pointer-events:none;font-weight:700}
+#rakeHpWrap{position:absolute;top:108px;left:50%;transform:translateX(-50%);width:260px;height:10px;background:rgba(0,0,0,.75);border:1px solid rgba(255,80,80,.4);border-radius:5px;display:none;z-index:6;overflow:hidden}
+#rakeHpBar{height:100%;width:100%;background:#c33;transition:width .15s linear}
+#rakeHpLabel{position:absolute;top:94px;left:50%;transform:translateX(-50%);color:#f88;font-family:monospace;font-size:10px;text-shadow:1px 1px #000;display:none;z-index:6;letter-spacing:3px;pointer-events:none}
+#hud{position:absolute;bottom:20px;right:20px;color:#0f0;font-family:monospace;font-size:13px;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:4px;pointer-events:none;display:none;line-height:1.6;text-align:right;z-index:6}
+#hud .state{color:#ff6;font-weight:700}
+#hud .watching{color:#f55}
+#hud .sniffing{color:#fb3}
+#hud .survival{color:#9fd89f;font-weight:700}
+#hud .enraged{color:#6af;font-weight:700;animation:ragePulse .5s ease-in-out infinite}
+#hud .blood{color:#f22;font-weight:700;animation:bloodHudPulse .4s ease-in-out infinite}
+@keyframes ragePulse{0%,100%{color:#6af}50%{color:#c3f}}
+@keyframes bloodHudPulse{0%,100%{color:#f22}50%{color:#f88}}
+#toolbar{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);display:none;gap:8px;z-index:6;pointer-events:none}
+.slot{width:52px;height:52px;background:rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.25);border-radius:6px;color:#999;font-family:monospace;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:border-color .15s,color .15s,box-shadow .15s}
+.slot.active{border-color:#ffd97a;color:#ffd97a;box-shadow:0 0 10px rgba(255,217,122,.6)}
+.slot .num{font-weight:700;font-size:14px;line-height:1}
+.slot .label{font-size:9px;letter-spacing:1px;opacity:.85;margin-top:3px}
+#staminaWrap{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);width:220px;height:10px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.25);border-radius:5px;display:none;z-index:6;overflow:hidden}
+#staminaBar{height:100%;width:100%;background:#3f3;transition:width .08s linear,background .2s linear}
+#staminaLabel{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);color:#cfc;font-family:monospace;font-size:11px;text-shadow:1px 1px #000;display:none;z-index:6;pointer-events:none;letter-spacing:1px}
+#hpWrap{position:absolute;bottom:74px;left:50%;transform:translateX(-50%);width:220px;height:12px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.25);border-radius:6px;display:none;z-index:6;overflow:hidden}
+#hpBar{height:100%;width:100%;background:#c33;transition:width .15s linear,background .2s linear}
+#hpLabel{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);color:#fcc;font-family:monospace;font-size:11px;text-shadow:1px 1px #000;display:none;z-index:6;pointer-events:none;letter-spacing:1px}
+#hitFlash{position:absolute;inset:0;pointer-events:none;z-index:7;background:rgba(200,0,0,0);transition:background .08s linear}
+#muzzleFlash{position:absolute;inset:0;pointer-events:none;z-index:6;background:rgba(255,220,120,0);transition:background .04s linear}
+#hitMarker{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:22px;height:22px;pointer-events:none;display:none;z-index:7}
+#hitMarker::before,#hitMarker::after{content:'';position:absolute;top:50%;left:0;width:100%;height:2px;background:#fff;box-shadow:0 0 6px #f55}
+#hitMarker::before{transform:translateY(-50%) rotate(45deg)}
+#hitMarker::after{transform:translateY(-50%) rotate(-45deg)}
+#defeatBanner{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);color:#8fd88f;font-family:monospace;font-weight:700;font-size:42px;letter-spacing:8px;text-shadow:0 0 24px rgba(143,216,143,.8);pointer-events:none;display:none;z-index:8;text-align:center}
+#enragedBanner{display:none !important}
+#bloodOverlay{position:absolute;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,rgba(120,0,0,.10) 0%,rgba(80,0,0,.35) 55%,rgba(20,0,0,.75) 100%);mix-blend-mode:multiply;opacity:0;transition:opacity 3s ease-out}
+#bloodOverlay.on{opacity:1}
+#runForYourLifeBanner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff1a1a;font-family:monospace;font-weight:700;font-size:72px;letter-spacing:12px;text-shadow:0 0 20px #f00,0 0 40px #f00,0 0 80px #8b0000;pointer-events:none;display:none;z-index:12;text-align:center;white-space:nowrap}
+#runForYourLifeBanner.visible{display:block;animation:runShake .09s infinite,runFlash .55s infinite}
+@keyframes runShake{0%{transform:translate(-50%,-50%) rotate(-2.5deg) scale(1)}20%{transform:translate(-50%,-50%) rotate(2deg) scale(1.03)}40%{transform:translate(-50%,-50%) rotate(-3.2deg) scale(.97)}60%{transform:translate(-50%,-50%) rotate(1.5deg) scale(1.02)}80%{transform:translate(-50%,-50%) rotate(-1deg) scale(1.01)}100%{transform:translate(-50%,-50%) rotate(-2.5deg) scale(1)}}
+@keyframes runFlash{0%,100%{opacity:1;color:#ff1a1a}50%{opacity:.4;color:#ff6a6a}}
+#shopPrompt{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);color:#ffd97a;font-family:monospace;font-size:15px;font-weight:700;background:rgba(0,0,0,.75);padding:10px 20px;border-radius:6px;border:1px solid rgba(255,217,122,.5);letter-spacing:2px;text-shadow:0 0 8px rgba(255,217,122,.5);display:none;z-index:6;pointer-events:none;animation:pulsePrompt 1.2s ease-in-out infinite}
+@keyframes pulsePrompt{0%,100%{opacity:1}50%{opacity:.55}}
+#shopOverlay{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.88);z-index:18;font-family:monospace;color:#fff;text-align:center}
+#shopOverlay h2{font-size:40px;letter-spacing:8px;margin:0 0 6px;color:#ffd97a;text-shadow:0 0 20px rgba(255,217,122,.5)}
+#shopPoints{font-size:20px;color:#ffd97a;margin:0 0 26px;letter-spacing:2px}
+.shopItem{width:460px;padding:16px 20px;margin:8px 0;background:rgba(20,20,20,.9);border:2px solid rgba(255,255,255,.15);border-radius:8px;display:grid;grid-template-columns:34px 1fr auto;grid-template-rows:auto auto;gap:4px 14px;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,opacity .15s}
+.shopItem:hover:not(.owned):not(.broke){border-color:#ffd97a;background:rgba(40,30,10,.9)}
+.shopItem.owned{border-color:#4a8f4a;background:rgba(15,30,15,.9);cursor:default}
+.shopItem.broke{opacity:.45;cursor:not-allowed}
+.shopItem .key{grid-row:1/3;align-self:center;justify-self:center;width:28px;height:28px;background:rgba(255,217,122,.15);border:1px solid rgba(255,217,122,.5);border-radius:4px;line-height:26px;text-align:center;font-weight:700;color:#ffd97a;font-size:14px}
+.shopItem .name{font-size:17px;font-weight:700;color:#fff;letter-spacing:1px}
+.shopItem .desc{font-size:12px;color:#aaa;opacity:.9}
+.shopItem .cost{grid-row:1/3;align-self:center;justify-self:end;font-size:16px;font-weight:700;color:#ffd97a;letter-spacing:1px}
+.shopItem.owned .cost{color:#8fd88f}
+.shopItem.broke .cost{color:#f55}
+#shopHint{margin-top:24px;font-size:13px;color:#888;letter-spacing:2px}
+#shopClose{margin-top:14px;padding:8px 24px;background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.3);border-radius:4px;font-family:monospace;font-size:14px;letter-spacing:2px;cursor:pointer}
+#shopClose:hover{color:#fff;border-color:#fff}
+#debugBadge{position:absolute;top:16px;left:16px;color:#0f0;background:rgba(0,0,0,.8);font-family:monospace;font-size:13px;font-weight:700;padding:10px 14px;border-radius:4px;display:none;pointer-events:none;z-index:6;line-height:1.55}
+#debugBadge .k{color:#ff6}
+#debugBadge .v{color:#6cf}
+#debugBadge .sec{color:#ff6;margin-top:6px}
+#debugBadge .blood{color:#f33}
+#debugFlash{color:#cfc;background:rgba(0,60,0,.4);padding:4px 6px;border-radius:3px;margin:4px 0;line-height:1.4}
+#dangerVignette{position:absolute;inset:0;pointer-events:none;z-index:5;box-shadow:inset 0 0 200px 40px rgba(150,0,0,0);transition:box-shadow .2s linear}
+#deathOverlay{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(20,0,0,.94);color:#f55;z-index:10;font-family:monospace;text-align:center;cursor:pointer}
+#deathOverlay h1{font-size:72px;letter-spacing:8px;margin:0 0 16px}
+#deathStats{font-size:22px;color:#fbb;letter-spacing:2px;margin:0 0 8px}
+#deathPhase{font-size:15px;color:#f88;opacity:.8;margin:0 0 8px;letter-spacing:2px}
+#deathPoints{font-size:17px;color:#ffd97a;margin:0 0 22px;letter-spacing:2px}
+#deathOverlay .retry{font-size:15px;opacity:.7}
+#mpStatus{position:absolute;top:18px;left:20px;color:#6cf;font-family:monospace;font-size:12px;background:rgba(0,0,0,.6);padding:6px 12px;border-radius:4px;display:none;z-index:6;pointer-events:none;letter-spacing:1px}
+.menuInput{background:#191c23;color:#cfd3dc;border:1px solid #2a2f3a;border-radius:5px;padding:6px 10px;font-family:monospace;font-size:12px;outline:none;width:130px}
+.menuInput:focus{border-color:#4a90ff}
+.menuColor{width:40px;height:26px;border:2px solid #2a2f3a;border-radius:5px;cursor:pointer;background:transparent;padding:0}
+.menuColor:hover{border-color:#4a90ff}
+.menuLang{background:#191c23;color:#cfd3dc;border:1px solid #2a2f3a;border-radius:5px;padding:6px 10px;font-family:monospace;font-size:12px;outline:none;cursor:pointer}
+.menuLang:focus{border-color:#4a90ff}
+#debugPasswordModal{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.88);z-index:25;font-family:monospace;color:#fff;text-align:center}
+#debugPasswordModal h3{color:#0f0;font-size:24px;letter-spacing:4px;margin:0 0 8px}
+#debugPasswordModal p{font-size:13px;color:#aaa;margin:0 0 18px;letter-spacing:1px}
+#debugPasswordInput{background:#191c23;color:#0f0;border:1px solid #2a2f3a;border-radius:5px;padding:10px 16px;font-family:monospace;font-size:16px;outline:none;width:260px;text-align:center;letter-spacing:2px}
+#debugPasswordInput:focus{border-color:#4a90ff;box-shadow:0 0 12px rgba(74,144,255,.4)}
+#debugPasswordError{color:#f55;font-size:12px;margin-top:10px;height:16px;letter-spacing:1px}
+#debugPasswordButtons{display:flex;gap:10px;margin-top:14px}
+#debugPasswordSubmit,#debugPasswordCancel{padding:8px 24px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#aaa;border-radius:4px;font-family:monospace;font-size:13px;letter-spacing:2px;cursor:pointer}
+#debugPasswordSubmit:hover{border-color:#0f0;color:#0f0}
+#debugPasswordCancel:hover{border-color:#f55;color:#f55}
+</style>
+</head>
+<body>
+<div id="bloodOverlay"></div>
+<div id="dangerVignette"></div>
+<div id="hitFlash"></div>
+<div id="muzzleFlash"></div>
+<div id="hitMarker"></div>
+<div id="defeatBanner" data-i18n="rakedRepelled">RAKE REPELLED</div>
+<div id="enragedBanner"></div>
+<div id="runForYourLifeBanner" data-i18n="runForYourLife">RUN FOR YOUR LIFE</div>
+<div id="mpStatus">👥 1</div>
+
+<div id="instructions">
+<h1 data-i18n="title">🌲 SURVIVE THE WOODS 🌲</h1>
+<p data-i18n="clickToStart">Click anywhere to start</p>
+<p data-i18n="controls"><b>WASD:</b> Move | <b>Shift:</b> Sprint | <b>Mouse:</b> Look | <b>ESC:</b> Pause</p>
+<p style="font-size:13px;opacity:.7" data-i18n="survive">Survive the night.</p>
+<div id="menuControls" onclick="event.stopPropagation()">
+<div id="renderDistBox">
+<div class="label"><span data-i18n="renderDist">RENDER DISTANCE</span><span class="val" id="renderDistVal">42</span></div>
+<input type="range" id="renderDistSlider" min="15" max="90" step="1" value="42">
+<div class="hint"><span data-i18n="fast">15 (fast)</span><span data-i18n="pretty">90 (pretty)</span></div>
+</div>
+<div class="menuToggle" id="shadowBox">
+<div><div class="label" data-i18n="realShadows">REALISTIC SHADOWS</div><div class="sub" data-i18n="realShadowsSub">Sun shadows + HD flashlight · lower FPS</div></div>
+<div class="switch" id="shadowSwitch"></div>
+</div>
+<div class="menuToggle">
+<div><div class="label" data-i18n="username">USERNAME</div><div class="sub" data-i18n="usernameSub">Shown above your head</div></div>
+<input class="menuInput" type="text" id="playerNameInput" maxlength="16" value="Player" placeholder="Player" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+</div>
+<div class="menuToggle">
+<div><div class="label" data-i18n="shirtColor">SHIRT COLOR</div><div class="sub" data-i18n="shirtColorSub">Your body color</div></div>
+<input class="menuColor" type="color" id="playerColorInput" value="#4488ff" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+</div>
+<div class="menuToggle">
+<div><div class="label" data-i18n="language">LANGUAGE</div><div class="sub" data-i18n="languageSub">Menu & UI text</div></div>
+<select class="menuLang" id="langSelect" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+<option value="en">English</option>
+<option value="pt">Português</option>
+</select>
+</div>
+<div class="menuToggle" id="bushesBox">
+<div><div class="label" data-i18n="bushes">BUSHES</div><div class="sub" data-i18n="bushesSub">Decoration only · keeps trees</div></div>
+<div class="switch" id="bushesSwitch"></div>
+</div>
+<div class="menuToggle" id="lowDetailBox">
+<div><div class="label" data-i18n="lowDetail">LOW DETAIL MODE</div><div class="sub" data-i18n="lowDetailSub">Simple trees, no bushes, smaller hitbox · reloads page</div></div>
+<div class="switch" id="lowDetailSwitch"></div>
+</div>
+</div>
+</div>
+<div id="crosshair"></div>
+<div id="clickHint">
+<h2 data-i18n="debugMode">🐛 DEBUG MODE</h2>
+<p data-i18n="clickCapture">Click anywhere to capture the mouse</p>
+<p data-i18n="fly">WASD = fly | Space / Shift = up / down</p>
+<p data-i18n="exitDebug">F = exit debug</p>
+</div>
+<div id="loading" data-i18n="loading">Loading world...</div>
+<div id="phaseHud" class="day"><div id="phaseName">DAY 1</div><div id="phaseTimer">2:30</div></div>
+<div id="pointsHud">💰 <span id="pointsValue">0</span></div>
+<div id="rakeShieldLabel" data-i18n="shield">SHIELD</div>
+<div id="rakeShieldWrap"><div id="rakeShieldBar"></div></div>
+<div id="rakeHpLabel" data-i18n="rake">RAKE</div>
+<div id="rakeHpWrap"><div id="rakeHpBar"></div></div>
+<div id="hpLabel" data-i18n="health">HEALTH</div>
+<div id="hpWrap"><div id="hpBar"></div></div>
+<div id="staminaLabel" data-i18n="stamina">STAMINA</div>
+<div id="staminaWrap"><div id="staminaBar"></div></div>
+<div id="toolbar">
+<div class="slot active" id="slot1"><div class="num">1</div><div class="label" data-i18n="light">LIGHT</div></div>
+<div class="slot" id="slot2"><div class="num">2</div><div class="label" data-i18n="gunLabel">GUN</div></div>
+</div>
+<div id="shopPrompt" data-i18n="pressE">PRESS [E] TO OPEN SHOP</div>
+<div id="shopOverlay">
+<h2 data-i18n="shop">SHOP</h2>
+<p id="shopPoints">Points: 0</p>
+<div class="shopItem" id="shopGunItem">
+<div class="key">1</div><div class="name" data-i18n="gun">Pistol</div>
+<div class="cost" id="shopGunCost">100 pts</div>
+<div class="desc" data-i18n="gunDesc">Ranged weapon. 10 shots to bring down the rake.</div>
+</div>
+<div class="shopItem" id="shopSpotlightItem">
+<div class="key">2</div><div class="name" data-i18n="spotlight">Pocket Spotlight</div>
+<div class="cost" id="shopSpotlightCost">10 pts</div>
+<div class="desc" data-i18n="spotlightDesc">Wide passive light. Never fully blind — even without the flashlight.</div>
+</div>
+<p id="shopHint" data-i18n="shopHint">Click an item to buy, or press [E] to close</p>
+<button id="shopClose" data-i18n="close">CLOSE</button>
+</div>
+<div id="debugBadge">
+<div>🐛 DEBUG MODE</div>
+<div>WASD+Space/Shift = fly</div>
+<div class="sec">── PHASE ──</div>
+<div><span class="k">4</span> skip to next phase</div>
+<div class="sec">── WAYPOINTS ──</div>
+<div><span class="k">E</span> set ENTRANCE (blue)</div>
+<div><span class="k">Q</span> set INSIDE (magenta)</div>
+<div class="sec">── ANIMATION ──</div>
+<div><span class="k">1 / 2</span> speed: <span class="v" id="debugAnimSpeed">0.55</span></div>
+<div><span class="k">3</span> ping-pong: <span class="v" id="debugPingPong">OFF</span></div>
+<div class="sec">── MONSTER ──</div>
+<div><span class="k">9 / 0</span> scale: <span class="v" id="debugMonScale">1.00</span></div>
+<div><span class="k">7 / 8</span> y-offset: <span class="v" id="debugMonY">0.000</span></div>
+<div><span class="k">H</span> heal all</div>
+<div class="sec">── PLAYER ──</div>
+<div><span class="k">[ / ]</span> stamina max: <span class="v" id="debugStamMax">150</span></div>
+<div><span class="k">, / .</span> sprint mult: <span class="v" id="debugSprintMult">2.10</span>x</div>
+<div><span class="k">; / '</span> stam drain: <span class="v" id="debugStamDrain">22</span>/s</div>
+<div class="sec">── PERF ──</div>
+<div><span class="k">5 / 6</span> shadow far: <span class="v" id="debugShadowFar">22</span></div>
+<div><span class="k">Z</span> shadow res: <span class="v" id="debugShadowRes">512</span></div>
+<div class="sec blood">── BLOOD HOUR ──</div>
+<div class="blood"><span class="k">B</span> force next kill: <span class="v" id="debugBloodForce">OFF</span></div>
+<div class="blood"><span class="k">V</span> trigger now</div>
+<div class="sec">── LIGHT ──</div>
+<div><span class="k">- / =</span> brightness: <span class="v" id="debugBright">1.00</span></div>
+<div class="sec">── VIEWMODEL ──</div>
+<div>arrows rotate | IJKLUM move</div>
+<div id="debugFlash">pos —<br>rot —</div>
+<div><span class="k">P</span> print &nbsp; <span class="k">R</span> reset</div>
+<div class="sec"><span class="k">F</span> = exit debug</div>
+</div>
+<div id="hud">
+<div><span data-i18n="hp">hp</span>: <span id="hudHP">100</span> / 100</div>
+<div><span data-i18n="survived">survived</span>: <span class="survival" id="hudSurvival">0:00</span></div>
+<div><span data-i18n="state">state</span>: <span class="state" id="hudState">—</span></div>
+<div><span data-i18n="dist">dist</span>: <span id="hudDist">—</span></div>
+<div><span data-i18n="watching">watching</span>: <span id="hudWatch" class="watching">—</span></div>
+<div><span data-i18n="sniffing">sniffing</span>: <span id="hudSniff" class="sniffing">—</span></div>
+</div>
+<div id="deathOverlay">
+<h1 data-i18n="youDied">YOU DIED</h1>
+<p id="deathStats">Survived 0:00</p>
+<p id="deathPhase">reached Night 1</p>
+<p id="deathPoints">+25 points earned</p>
+<p class="retry" data-i18n="clickRespawn">Click or press R to respawn</p>
+</div>
+
+<div id="debugPasswordModal">
+<h3 id="dpModalTitle">🔒 DEBUG ACCESS</h3>
+<p id="dpModalSub">Enter password to unlock</p>
+<input type="password" id="debugPasswordInput" autocomplete="off" spellcheck="false">
+<div id="debugPasswordError"></div>
+<div id="debugPasswordButtons">
+<button id="debugPasswordSubmit">SUBMIT</button>
+<button id="debugPasswordCancel">CANCEL</button>
+</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="three.min.js"></script>
+<script src="PointerLockControls.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="src/translations.js"></script>
+<script src="src/config.js"></script>
+<script src="src/net.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/world.js"></script>
+<script src="src/monster.js"></script>
+<script src="src/player.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
