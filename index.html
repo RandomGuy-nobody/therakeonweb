@@ -640,6 +640,42 @@ const RAKE_SPAWN_WORLD = { x: 0, y: 0, z: -33 };
 const RAKE_GROUND_Y = 0;
 const GRAVITY = 20;
 
+// ============================================================
+// HOUSE LANDMARK
+// ============================================================
+const HOUSE_MODEL_PATH = 'models/safehouse.glb';
+const HOUSE_POSITION = { x: 20, y: 0, z: 5 };
+const HOUSE_SCALE = 1.0;
+
+// Wall boxes in house-local space (as exported from collision editor).
+// Each: { x, z, halfX, halfZ, ry }
+const HOUSE_WALLS = [
+  { x: 1.800, z: 3.400, halfX: 1.000, halfZ: 0.300, ry: 0.1745 },
+  { x: -0.100, z: 3.700, halfX: 1.000, halfZ: 0.300, ry: 0.1745 },
+  { x: -1.600, z: 3.100, halfX: 1.000, halfZ: 0.300, ry: 1.7453 },
+  { x: -1.900, z: 1.100, halfX: 1.000, halfZ: 0.300, ry: 1.7453 },
+  { x: -2.200, z: -0.800, halfX: 1.000, halfZ: 0.300, ry: 1.7453 },
+  { x: -1.100, z: -1.600, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+  { x: -0.100, z: -1.600, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+  { x: 0.900, z: -1.600, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 1.250, z: 0.400, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 1.400, z: 1.000, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 2.500, z: 1.800, halfX: 1.000, halfZ: 0.300, ry: 6.4577 },
+  { x: 3.000, z: 0.800, halfX: 1.000, halfZ: 0.300, ry: 8.0285 },
+  { x: 2.900, z: 0.200, halfX: 1.000, halfZ: 0.300, ry: 8.0285 },
+  { x: 2.000, z: -0.400, halfX: 1.000, halfZ: 0.300, ry: 9.5993 },
+  { x: 1.600, z: -2.200, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+  { x: 3.500, z: -2.500, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+  { x: 5.000, z: -2.000, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 5.400, z: -0.100, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 5.700, z: 1.800, halfX: 1.000, halfZ: 0.300, ry: 4.8869 },
+  { x: 5.500, z: 2.900, halfX: 1.000, halfZ: 0.300, ry: 4.7124 },
+  { x: 3.100, z: 4.000, halfX: 1.000, halfZ: 0.300, ry: 6.4577 },
+  { x: 2.200, z: 3.500, halfX: 1.000, halfZ: 0.300, ry: 9.3375 },
+  { x: -0.500, z: -2.000, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+  { x: -1.600, z: -1.800, halfX: 1.000, halfZ: 0.300, ry: 3.3161 },
+];
+
 var SPRINT_MULT = 2.10;
 var STAMINA_MAX = 150;
 var STAMINA_DRAIN = 22;
@@ -1290,6 +1326,9 @@ function treeTooCloseToSpawn(x, z) {
   if (dx * dx + dz * dz < SPAWN_CLEAR_RADIUS * SPAWN_CLEAR_RADIUS) return true;
   const sdx = x - SHOP_POSITION.x, sdz = z - SHOP_POSITION.z;
   if (sdx * sdx + sdz * sdz < 36) return true;
+  // Keep trees out of the house footprint (8-unit radius around house center)
+  const hdx = x - HOUSE_POSITION.x, hdz = z - HOUSE_POSITION.z;
+  if (hdx * hdx + hdz * hdz < 64) return true;
   return false;
 }
 function tryPlaceTree() {
@@ -1513,6 +1552,18 @@ function isBlocked(newX, newZ, oldX, oldZ) {
       if (!insideOld) return true;
     }
   }
+  // House walls — rotate each wall into its local frame before the AABB check
+  for (let i = 0; i < HOUSE_WALLS.length; i++) {
+    const w = HOUSE_WALLS[i];
+    const wx = HOUSE_POSITION.x + w.x;
+    const wz = HOUSE_POSITION.z + w.z;
+    const dx = newX - wx, dz = newZ - wz;
+    const c = Math.cos(w.ry), s = Math.sin(w.ry);
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    if (Math.abs(lx) < w.halfX + PLAYER_RADIUS &&
+        Math.abs(lz) < w.halfZ + PLAYER_RADIUS) return true;
+  }
   return false;
 }
 
@@ -1555,15 +1606,14 @@ scene.add(insideWpMarker);
 function setEntranceWaypoint(x, y, z) { entranceWaypoint.set(x, y, z); entranceWpMarker.position.copy(entranceWaypoint); }
 function setInsideWaypoint(x, y, z) { insideWaypoint.set(x, y, z); insideWpMarker.position.copy(insideWaypoint); }
 
-new THREE.GLTFLoader().load(CAVE_PATH, (gltf) => {
-  const cave = gltf.scene;
-  cave.scale.setScalar(CAVE_SCALE);
-  cave.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  caveGroup.add(cave);
-  caveGroup.updateMatrixWorld(true);
-  caveBlockBox = new THREE.Box3().setFromObject(cave);
-  console.log('=== CAVE loaded ===');
-}, undefined, () => {});
+new THREE.GLTFLoader().load(HOUSE_MODEL_PATH, (gltf) => {
+  const house = gltf.scene;
+  house.scale.setScalar(HOUSE_SCALE);
+  house.position.set(HOUSE_POSITION.x, HOUSE_POSITION.y, HOUSE_POSITION.z);
+  house.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(house);
+  console.log('=== HOUSE loaded ===');
+}, undefined, (e) => console.error('house.glb failed:', e));
 
 // ============================================================
 // MENU CONTROLS
