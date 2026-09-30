@@ -1558,6 +1558,15 @@ scene.add(insideWpMarker);
 function setEntranceWaypoint(x, y, z) { entranceWaypoint.set(x, y, z); entranceWpMarker.position.copy(entranceWaypoint); }
 function setInsideWaypoint(x, y, z) { insideWaypoint.set(x, y, z); insideWpMarker.position.copy(insideWaypoint); }
 
+new THREE.GLTFLoader().load(CAVE_PATH, (gltf) => {
+  const cave = gltf.scene;
+  cave.scale.setScalar(CAVE_SCALE);
+  cave.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  caveGroup.add(cave);
+  caveGroup.updateMatrixWorld(true);
+  caveBlockBox = new THREE.Box3().setFromObject(cave);
+  console.log('=== CAVE loaded ===');
+}, undefined, (e) => console.error('cave.glb failed:', e));
 
 // ============================================================
 // MENU CONTROLS
